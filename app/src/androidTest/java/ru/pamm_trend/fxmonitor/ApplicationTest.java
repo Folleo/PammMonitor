@@ -1,4 +1,4 @@
-package ru.pamm_trend.pammmonitor;
+package ru.pamm_trend.fxmonitor;
 
 import android.app.Application;
 import android.test.ApplicationTestCase;

@@ -1,21 +1,21 @@
-package ru.pamm_trend.pammmonitor;
+package ru.pamm_trend.fxmonitor;
 
 import android.animation.Animator;
 import android.animation.AnimatorListenerAdapter;
 import android.annotation.TargetApi;
 import android.app.Activity;
 import android.app.LoaderManager.LoaderCallbacks;
-import android.content.ContentResolver;
 import android.content.CursorLoader;
 import android.content.Loader;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.AsyncTask;
-
 import android.os.Build;
 import android.os.Bundle;
 import android.provider.ContactsContract;
 import android.text.TextUtils;
+import android.util.Base64;
+import android.util.Log;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.View.OnClickListener;
@@ -26,6 +26,12 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
 
+import org.apache.http.HttpEntity;
+import org.apache.http.HttpResponse;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.impl.client.DefaultHttpClient;
+import org.apache.http.util.EntityUtils;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -35,21 +41,21 @@ import java.util.List;
  */
 public class LoginActivity extends Activity implements LoaderCallbacks<Cursor> {
 
-    /**
-     * A dummy authentication store containing known user names and passwords.
-     * TODO: remove after connecting to a real authentication system.
-     */
-    private static final String[] DUMMY_CREDENTIALS = new String[]{
-            "foo@example.com:hello", "bar@example.com:world"
-    };
+    private final String LOG_TAG = LoginActivity.class.getSimpleName();
+
+    private static final String HOST_NAME = "api.fx-trend.com";
+    private static final String URL = "http://api.fx-trend.com";
+    //private static final String USER_NAME_CONST = "folleo";
+    private static final String PASSWORD_CONST = "bb95038342090b2f3626f9914e26b1c8";
+
     /**
      * Keep track of the login task to ensure we can cancel it if requested.
      */
     private UserLoginTask mAuthTask = null;
 
     // UI references.
-    private AutoCompleteTextView mEmailView;
-    private EditText mPasswordView;
+    private AutoCompleteTextView mLoginView;
+    private EditText mApiKeyView;
     private View mProgressView;
     private View mLoginFormView;
 
@@ -59,11 +65,11 @@ public class LoginActivity extends Activity implements LoaderCallbacks<Cursor> {
         setContentView(R.layout.activity_login);
 
         // Set up the login form.
-        mEmailView = (AutoCompleteTextView) findViewById(R.id.email);
+        mLoginView = (AutoCompleteTextView) findViewById(R.id.email);
         populateAutoComplete();
 
-        mPasswordView = (EditText) findViewById(R.id.password);
-        mPasswordView.setOnEditorActionListener(new TextView.OnEditorActionListener() {
+        mApiKeyView = (EditText) findViewById(R.id.password);
+        mApiKeyView.setOnEditorActionListener(new TextView.OnEditorActionListener() {
             @Override
             public boolean onEditorAction(TextView textView, int id, KeyEvent keyEvent) {
                 if (id == R.id.login || id == EditorInfo.IME_NULL) {
@@ -102,32 +108,32 @@ public class LoginActivity extends Activity implements LoaderCallbacks<Cursor> {
         }
 
         // Reset errors.
-        mEmailView.setError(null);
-        mPasswordView.setError(null);
+        mLoginView.setError(null);
+        mApiKeyView.setError(null);
 
         // Store values at the time of the login attempt.
-        String email = mEmailView.getText().toString();
-        String password = mPasswordView.getText().toString();
+        String login = mLoginView.getText().toString();
+        String apiKey = mApiKeyView.getText().toString();
 
         boolean cancel = false;
         View focusView = null;
 
 
         // Check for a valid password, if the user entered one.
-        if (!TextUtils.isEmpty(password) && !isPasswordValid(password)) {
-            mPasswordView.setError(getString(R.string.error_invalid_password));
-            focusView = mPasswordView;
+        if (!TextUtils.isEmpty(apiKey) && !isApiKeyValid(apiKey)) {
+            mApiKeyView.setError(getString(R.string.error_invalid_api_key));
+            focusView = mApiKeyView;
             cancel = true;
         }
 
         // Check for a valid email address.
-        if (TextUtils.isEmpty(email)) {
-            mEmailView.setError(getString(R.string.error_field_required));
-            focusView = mEmailView;
+        if (TextUtils.isEmpty(login)) {
+            mLoginView.setError(getString(R.string.error_field_required));
+            focusView = mLoginView;
             cancel = true;
-        } else if (!isEmailValid(email)) {
-            mEmailView.setError(getString(R.string.error_invalid_email));
-            focusView = mEmailView;
+        } else if (!isLoginValid(login)) {
+            mLoginView.setError(getString(R.string.error_invalid_login));
+            focusView = mLoginView;
             cancel = true;
         }
 
@@ -139,19 +145,18 @@ public class LoginActivity extends Activity implements LoaderCallbacks<Cursor> {
             // Show a progress spinner, and kick off a background task to
             // perform the user login attempt.
             showProgress(true);
-            mAuthTask = new UserLoginTask(email, password);
+            mAuthTask = new UserLoginTask(login, apiKey);
             mAuthTask.execute((Void) null);
         }
     }
 
-    private boolean isEmailValid(String email) {
-        //TODO: Replace this with your own logic
-        return email.contains("@");
+    private boolean isLoginValid(String login) {
+        return login.length() > 2;
     }
 
-    private boolean isPasswordValid(String password) {
-        //TODO: Replace this with your own logic
-        return password.length() > 4;
+    private boolean isApiKeyValid(String apiKey) {
+        // Note: Actually API key's length is 32
+        return apiKey.length() > 30;
     }
 
     /**
@@ -241,7 +246,7 @@ public class LoginActivity extends Activity implements LoaderCallbacks<Cursor> {
                 new ArrayAdapter<String>(LoginActivity.this,
                         android.R.layout.simple_dropdown_item_1line, emailAddressCollection);
 
-        mEmailView.setAdapter(adapter);
+        mLoginView.setAdapter(adapter);
     }
 
     /**
@@ -250,35 +255,55 @@ public class LoginActivity extends Activity implements LoaderCallbacks<Cursor> {
      */
     public class UserLoginTask extends AsyncTask<Void, Void, Boolean> {
 
-        private final String mEmail;
-        private final String mPassword;
+        private final String mLogin;
+        private final String mApiKey;
 
         UserLoginTask(String email, String password) {
-            mEmail = email;
-            mPassword = password;
+            mLogin = email;
+            mApiKey = password;
         }
 
+        /**
+         * Connect to api.fx-trend.com server
+         * and try to authenticate
+         * with login and infoAPI key.
+         */
         @Override
         protected Boolean doInBackground(Void... params) {
-            // TODO: attempt authentication against a network service.
+            boolean responseStatus = false;
+
+            DefaultHttpClient httpclient = new DefaultHttpClient();
+            String credentials = mLogin + ":" + PASSWORD_CONST;
+            String base64EncodedCredentials = Base64.encodeToString(credentials.getBytes(), Base64.NO_WRAP);
 
             try {
-                // Simulate network access.
-                Thread.sleep(2000);
-            } catch (InterruptedException e) {
-                return false;
-            }
+                HttpGet httpGet = new HttpGet(URL + "/info/get_user_investors_info");
+                httpGet.setHeader("Authorization", "Basic " + base64EncodedCredentials);
+                httpGet.setHeader("Accept", "text/json");
 
-            for (String credential : DUMMY_CREDENTIALS) {
-                String[] pieces = credential.split(":");
-                if (pieces[0].equals(mEmail)) {
-                    // Account exists, return true if the password matches.
-                    return pieces[1].equals(mPassword);
+                Log.d(LOG_TAG, "Executing request: " + httpGet.getRequestLine());
+                HttpResponse response = httpclient.execute(httpGet);
+                HttpEntity entity = response.getEntity();
+
+                Log.d(LOG_TAG, "----------------------------------------\n" + response.getStatusLine());
+                if (entity != null) {
+                    Log.d(LOG_TAG, "Response content length: " + entity.getContentLength());
+                    Log.d(LOG_TAG, EntityUtils.toString(entity));
+                    responseStatus = true;
                 }
-            }
 
-            // TODO: register the new account here.
-            return true;
+                // TODO: Parse response and if status - true save credentials and return true
+
+            } catch(Exception e){
+                responseStatus = false;
+                Log.e(LOG_TAG, e.getMessage(), e);
+                e.printStackTrace();
+            } finally {
+                // When HttpClient instance is no longer needed,
+                // shut down the connection manager
+                httpclient.getConnectionManager().shutdown();
+            }
+            return responseStatus;
         }
 
         @Override
@@ -287,10 +312,14 @@ public class LoginActivity extends Activity implements LoaderCallbacks<Cursor> {
             showProgress(false);
 
             if (success) {
+                // Save user credential in the SharedPreferences
+                PrefUtils.saveToPrefs(getBaseContext(), PrefUtils.PREFS_LOGIN_USERNAME_KEY, mLogin);
+                PrefUtils.saveToPrefs(getBaseContext(), PrefUtils.PREFS_LOGIN_API_KEY, mApiKey);
                 finish();
             } else {
-                mPasswordView.setError(getString(R.string.error_incorrect_password));
-                mPasswordView.requestFocus();
+                mApiKeyView.setError(getString(R.string.error_incorrect_api_key));
+                mApiKeyView.requestFocus();
+                PrefUtils.saveToPrefs(getApplicationContext(), PrefUtils.PREFS_LOGIN_API_KEY, null);
             }
         }
 
