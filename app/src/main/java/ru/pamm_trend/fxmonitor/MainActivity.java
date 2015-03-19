@@ -17,9 +17,9 @@ public class MainActivity extends ActionBarActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        //if (!PrefUtils.isSavedCredentials(this)) {
+        if (!PrefUtils.isSavedCredentials(this)) {
             startActivity(new Intent(MainActivity.this, LoginActivity.class));
-        //}
+        }
 
         setContentView(R.layout.activity_main);
         if (savedInstanceState == null) {
