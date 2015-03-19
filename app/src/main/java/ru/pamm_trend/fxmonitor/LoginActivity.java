@@ -4,15 +4,9 @@ import android.animation.Animator;
 import android.animation.AnimatorListenerAdapter;
 import android.annotation.TargetApi;
 import android.app.Activity;
-import android.app.LoaderManager.LoaderCallbacks;
-import android.content.CursorLoader;
-import android.content.Loader;
-import android.database.Cursor;
-import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Build;
 import android.os.Bundle;
-import android.provider.ContactsContract;
 import android.text.TextUtils;
 import android.util.Base64;
 import android.util.Log;
@@ -20,7 +14,6 @@ import android.view.KeyEvent;
 import android.view.View;
 import android.view.View.OnClickListener;
 import android.view.inputmethod.EditorInfo;
-import android.widget.ArrayAdapter;
 import android.widget.AutoCompleteTextView;
 import android.widget.Button;
 import android.widget.EditText;
@@ -28,25 +21,23 @@ import android.widget.TextView;
 
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpResponse;
+import org.apache.http.HttpStatus;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.DefaultHttpClient;
 import org.apache.http.util.EntityUtils;
 
-import java.util.ArrayList;
-import java.util.List;
-
 
 /**
- * A login screen that offers login via email/password.
+ * A login screen that offers login via API key.
  */
-public class LoginActivity extends Activity implements LoaderCallbacks<Cursor> {
+public class LoginActivity extends Activity {
 
     private final String LOG_TAG = LoginActivity.class.getSimpleName();
 
     private static final String HOST_NAME = "api.fx-trend.com";
     private static final String URL = "http://api.fx-trend.com";
     //private static final String USER_NAME_CONST = "folleo";
-    private static final String PASSWORD_CONST = "bb95038342090b2f3626f9914e26b1c8";
+    //private static final String PASSWORD_CONST = "bb95038342090b2f3626f9914e26b1c8";
 
     /**
      * Keep track of the login task to ensure we can cancel it if requested.
@@ -65,10 +56,9 @@ public class LoginActivity extends Activity implements LoaderCallbacks<Cursor> {
         setContentView(R.layout.activity_login);
 
         // Set up the login form.
-        mLoginView = (AutoCompleteTextView) findViewById(R.id.email);
-        populateAutoComplete();
+        mLoginView = (AutoCompleteTextView) findViewById(R.id.login);
 
-        mApiKeyView = (EditText) findViewById(R.id.password);
+        mApiKeyView = (EditText) findViewById(R.id.api_key);
         mApiKeyView.setOnEditorActionListener(new TextView.OnEditorActionListener() {
             @Override
             public boolean onEditorAction(TextView textView, int id, KeyEvent keyEvent) {
@@ -80,8 +70,8 @@ public class LoginActivity extends Activity implements LoaderCallbacks<Cursor> {
             }
         });
 
-        Button mEmailSignInButton = (Button) findViewById(R.id.email_sign_in_button);
-        mEmailSignInButton.setOnClickListener(new OnClickListener() {
+        Button mLoginSignInButton = (Button) findViewById(R.id.login_sign_in_button);
+        mLoginSignInButton.setOnClickListener(new OnClickListener() {
             @Override
             public void onClick(View view) {
                 attemptLogin();
@@ -92,14 +82,9 @@ public class LoginActivity extends Activity implements LoaderCallbacks<Cursor> {
         mProgressView = findViewById(R.id.login_progress);
     }
 
-    private void populateAutoComplete() {
-        getLoaderManager().initLoader(0, null, this);
-    }
-
-
     /**
      * Attempts to sign in or register the account specified by the login form.
-     * If there are form errors (invalid email, missing fields, etc.), the
+     * If there are form errors (invalid login, missing fields, etc.), the
      * errors are presented and no actual login attempt is made.
      */
     public void attemptLogin() {
@@ -119,14 +104,18 @@ public class LoginActivity extends Activity implements LoaderCallbacks<Cursor> {
         View focusView = null;
 
 
-        // Check for a valid password, if the user entered one.
-        if (!TextUtils.isEmpty(apiKey) && !isApiKeyValid(apiKey)) {
+        // Check for a valid API key.
+        if (TextUtils.isEmpty(apiKey)){
+            mApiKeyView.setError(getString(R.string.error_field_required));
+            focusView = mApiKeyView;
+            cancel = true;
+        } else if (!isApiKeyValid(apiKey)) {
             mApiKeyView.setError(getString(R.string.error_invalid_api_key));
             focusView = mApiKeyView;
             cancel = true;
         }
 
-        // Check for a valid email address.
+        // Check for a valid login.
         if (TextUtils.isEmpty(login)) {
             mLoginView.setError(getString(R.string.error_field_required));
             focusView = mLoginView;
@@ -151,7 +140,7 @@ public class LoginActivity extends Activity implements LoaderCallbacks<Cursor> {
     }
 
     private boolean isLoginValid(String login) {
-        return login.length() > 2;
+        return login.length() > 4;
     }
 
     private boolean isApiKeyValid(String apiKey) {
@@ -195,85 +184,29 @@ public class LoginActivity extends Activity implements LoaderCallbacks<Cursor> {
         }
     }
 
-    @Override
-    public Loader<Cursor> onCreateLoader(int i, Bundle bundle) {
-        return new CursorLoader(this,
-                // Retrieve data rows for the device user's 'profile' contact.
-                Uri.withAppendedPath(ContactsContract.Profile.CONTENT_URI,
-                        ContactsContract.Contacts.Data.CONTENT_DIRECTORY), ProfileQuery.PROJECTION,
-
-                // Select only email addresses.
-                ContactsContract.Contacts.Data.MIMETYPE +
-                        " = ?", new String[]{ContactsContract.CommonDataKinds.Email
-                .CONTENT_ITEM_TYPE},
-
-                // Show primary email addresses first. Note that there won't be
-                // a primary email address if the user hasn't specified one.
-                ContactsContract.Contacts.Data.IS_PRIMARY + " DESC");
-    }
-
-    @Override
-    public void onLoadFinished(Loader<Cursor> cursorLoader, Cursor cursor) {
-        List<String> emails = new ArrayList<String>();
-        cursor.moveToFirst();
-        while (!cursor.isAfterLast()) {
-            emails.add(cursor.getString(ProfileQuery.ADDRESS));
-            cursor.moveToNext();
-        }
-
-        addEmailsToAutoComplete(emails);
-    }
-
-    @Override
-    public void onLoaderReset(Loader<Cursor> cursorLoader) {
-
-    }
-
-    private interface ProfileQuery {
-        String[] PROJECTION = {
-                ContactsContract.CommonDataKinds.Email.ADDRESS,
-                ContactsContract.CommonDataKinds.Email.IS_PRIMARY,
-        };
-
-        int ADDRESS = 0;
-        int IS_PRIMARY = 1;
-    }
-
-
-    private void addEmailsToAutoComplete(List<String> emailAddressCollection) {
-        //Create adapter to tell the AutoCompleteTextView what to show in its dropdown list.
-        ArrayAdapter<String> adapter =
-                new ArrayAdapter<String>(LoginActivity.this,
-                        android.R.layout.simple_dropdown_item_1line, emailAddressCollection);
-
-        mLoginView.setAdapter(adapter);
-    }
-
     /**
-     * Represents an asynchronous login/registration task used to authenticate
-     * the user.
+     * Represents an asynchronous login task used to authenticate the user.
      */
     public class UserLoginTask extends AsyncTask<Void, Void, Boolean> {
 
         private final String mLogin;
         private final String mApiKey;
 
-        UserLoginTask(String email, String password) {
-            mLogin = email;
-            mApiKey = password;
+        UserLoginTask(String login, String apiKey) {
+            mLogin = login;
+            mApiKey = apiKey;
         }
 
         /**
-         * Connect to api.fx-trend.com server
-         * and try to authenticate
-         * with login and infoAPI key.
+         * Connect to api.fx-trend.com server and try to authenticate
+         * with login and infoAPI key using Basic HTTP authorization.
          */
         @Override
         protected Boolean doInBackground(Void... params) {
-            boolean responseStatus = false;
+            boolean authStatus = false;
 
             DefaultHttpClient httpclient = new DefaultHttpClient();
-            String credentials = mLogin + ":" + PASSWORD_CONST;
+            String credentials = mLogin + ":" + mApiKey;
             String base64EncodedCredentials = Base64.encodeToString(credentials.getBytes(), Base64.NO_WRAP);
 
             try {
@@ -289,13 +222,16 @@ public class LoginActivity extends Activity implements LoaderCallbacks<Cursor> {
                 if (entity != null) {
                     Log.d(LOG_TAG, "Response content length: " + entity.getContentLength());
                     Log.d(LOG_TAG, EntityUtils.toString(entity));
-                    responseStatus = true;
+
+                    int statusCode = response.getStatusLine().getStatusCode();
+
+                    if (statusCode == HttpStatus.SC_OK) {
+                        authStatus = true;
+                    }
                 }
 
-                // TODO: Parse response and if status - true save credentials and return true
-
             } catch(Exception e){
-                responseStatus = false;
+                authStatus = false;
                 Log.e(LOG_TAG, e.getMessage(), e);
                 e.printStackTrace();
             } finally {
@@ -303,7 +239,7 @@ public class LoginActivity extends Activity implements LoaderCallbacks<Cursor> {
                 // shut down the connection manager
                 httpclient.getConnectionManager().shutdown();
             }
-            return responseStatus;
+            return authStatus;
         }
 
         @Override
@@ -312,7 +248,7 @@ public class LoginActivity extends Activity implements LoaderCallbacks<Cursor> {
             showProgress(false);
 
             if (success) {
-                // Save user credential in the SharedPreferences
+                // Since API key is not a password, we can store it SharedPreferences
                 PrefUtils.saveToPrefs(getBaseContext(), PrefUtils.PREFS_LOGIN_USERNAME_KEY, mLogin);
                 PrefUtils.saveToPrefs(getBaseContext(), PrefUtils.PREFS_LOGIN_API_KEY, mApiKey);
                 finish();
