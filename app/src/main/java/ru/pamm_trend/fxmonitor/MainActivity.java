@@ -23,11 +23,27 @@ public class MainActivity extends ActionBarActivity {
         }
 
         setContentView(R.layout.activity_main);
-        if (savedInstanceState == null) {
-            getSupportFragmentManager().beginTransaction()
-                    .add(R.id.container, new AccountsFragment(), DETAILFRAGMENT_TAG)
-                    .commit();
+        if (findViewById(R.id.accounts_detail_container) != null) {
+            // The detail container view will be present only in the large-screen layouts
+            // (res/layout-sw600dp). If this view is present, then the activity should be
+            // in two-pane mode.
+            mTwoPane = true;
+            // In two-pane mode, show the detail view in this activity by
+            // adding or replacing the detail fragment using a
+            // fragment transaction.
+            if (savedInstanceState == null) {
+                getSupportFragmentManager().beginTransaction()
+                        .replace(R.id.accounts_detail_container, new DetailFragment(), DETAILFRAGMENT_TAG)
+                        .commit();
+            }
+        } else {
+            mTwoPane = false;
+            getSupportActionBar().setElevation(0f);
         }
+
+        //AccountsFragment accountsFragment = (AccountsFragment) getSupportFragmentManager().findFragmentById(R.id.fragment_accounts);
+        //accountsFragment.setUseTodayLayout(!mTwoPane);
+
     }
 
 
@@ -47,6 +63,12 @@ public class MainActivity extends ActionBarActivity {
 
         //noinspection SimplifiableIfStatement
         if (id == R.id.action_settings) {
+            startActivity(new Intent(this, SettingsActivity.class));
+            return true;
+        }
+        if (id == R.id.action_update) {
+            ParseUtils parseUtils = new ParseUtils();
+            parseUtils.getUserInvestorsInfo();
             return true;
         }
 
