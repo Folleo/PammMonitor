@@ -11,7 +11,7 @@ import ru.pamm_trend.fxmonitor.data.AccountsContract.AccountEntry;
  */
 public class AccountsDBHelper extends SQLiteOpenHelper {
 
-    // If you change the database schema, you must increment the database version.
+    // Increment the database version if database schema has been changed.
     private static final int DATABASE_VERSION = 1;
 
     static final String DATABASE_NAME = "accounts.db";
