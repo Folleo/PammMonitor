@@ -248,7 +248,7 @@ public class LoginActivity extends Activity {
             showProgress(false);
 
             if (success) {
-                // Since API key is not a password, we can store it SharedPreferences
+                // Since API key is not a password, we can store it in SharedPreferences
                 PrefUtils.saveToPrefs(getBaseContext(), PrefUtils.PREFS_LOGIN_USERNAME_KEY, mLogin);
                 PrefUtils.saveToPrefs(getBaseContext(), PrefUtils.PREFS_LOGIN_API_KEY, mApiKey);
                 finish();
